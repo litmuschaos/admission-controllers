@@ -23,20 +23,20 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-
-	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
-	litmuschaosv1alpha1 "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned"
+	"strings"
 
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/klog"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/klog"
+
+	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
+	litmuschaosv1alpha1 "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned"
 )
 
 var (
@@ -180,7 +180,7 @@ func validationRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool 
 	return required
 }
 
-func (wh *webhook) validateChaosEngineCreate(req *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
+func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
 	response := &v1beta1.AdmissionResponse{}
 	response.Allowed = true
 	var chaosEngine v1alpha1.ChaosEngine
@@ -196,21 +196,37 @@ func (wh *webhook) validateChaosEngineCreate(req *v1beta1.AdmissionRequest) *v1b
 		}
 		return response
 	}
-	if chaosEngine.Spec.Appinfo.Appns != "litmus" {
-		klog.V(0).Infof("Got the request successfully, will validate the namespace of application")
-		response.Allowed = false
-		response.Result = &metav1.Status{
-			Status:  metav1.StatusFailure,
-			Code:    http.StatusBadRequest,
-			Reason:  metav1.StatusReasonBadRequest,
-			Message: "Successfully Validated",
-		}
 
+	validationStatus, err := wh.validateChaosTarget(&chaosEngine)
+	if validationStatus {
+		klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
+		response.Allowed = true
+		return response
 	}
+
+	klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
+	response.Allowed = false
+	response.Result = &metav1.Status{
+		Status:  metav1.StatusFailure,
+		Code:    http.StatusBadRequest,
+		Reason:  metav1.StatusReasonBadRequest,
+		Message: err.Error(),
+	}
+
+	// if chaosEngine.Spec.Appinfo.Appns != "litmus" {
+	// 	klog.V(0).Infof("Got the request successfully, will validate the namespace of application")
+	// 	response.Allowed = false
+	// 	response.Result = &metav1.Status{
+	// 		Status:  metav1.StatusFailure,
+	// 		Code:    http.StatusBadRequest,
+	// 		Reason:  metav1.StatusReasonBadRequest,
+	// 		Message: "Successfully Validated",
+	// 	}
+
+	// }
 
 	return response
 }
-
 
 // validate validates the persistentvolumeclaim(PVC) create, delete request
 func (wh *webhook) validate(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
@@ -224,52 +240,26 @@ func (wh *webhook) validate(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionRespo
 		req.Kind, req.Namespace, req.Name, resourceName, req.UID, req.Operation, req.UserInfo)
 	response := &v1beta1.AdmissionResponse{}
 	response.Allowed = true
-	klog.Info("Admission webhook request received")
 	switch req.Kind.Kind {
-	// case "PersistentVolumeClaim":
-	// 	klog.V(2).Infof("Admission webhook request for type %s", req.Kind.Kind)
-	// 	return wh.validatePVC(ar)
-	// case "CStorPoolCluster":
-	// 	klog.V(2).Infof("Admission webhook request for type %s", req.Kind.Kind)
-	// 	return wh.validateCSPC(ar)
-	// default:
-	// 	klog.V(2).Infof("Admission webhook not configured for type %s", req.Kind.Kind)
-	// 	return response
+
 	case "ChaosEngine":
 		klog.V(0).Infof("Starting to validate, admission webhook request for type: %s", req.Kind.Kind)
 		return wh.validateChaosEngine(ar)
 
 	default:
-		klog.V(0).Infof("Inside Default Case, which means unable to validate the Kind of resource")
 		return response
 	}
 
 }
-
-// func (wh *webhook) validatePVC(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
-// 	req := ar.Request
-// 	response := &v1beta1.AdmissionResponse{}
-// 	response.Allowed = true
-// 	// validates only if requested operation is CREATE or DELETE
-// 	if req.Operation == v1beta1.Create {
-// 		return wh.validatePVCCreateRequest(req)
-// 	} else if req.Operation == v1beta1.Delete {
-// 		return wh.validatePVCDeleteRequest(req)
-// 	}
-// 	klog.V(2).Info("Admission wehbook for PVC module not " +
-// 		"configured for operations other than DELETE and CREATE")
-// 	return response
-// }
 
 func (wh *webhook) validateChaosEngine(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	req := ar.Request
 	response := &v1beta1.AdmissionResponse{}
 	response.Allowed = true
 
-	if req.Operation == v1beta1.Create {
-		return wh.validateChaosEngineCreate(req)
+	if req.Operation == v1beta1.Create || req.Operation == v1beta1.Update {
+		return wh.validateChaosEngineCreateUpdate(req)
 	}
-
 	return response
 }
 
@@ -306,7 +296,6 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		if r.URL.Path == "/validate" {
-			klog.V(0).Infof("Got something in /validate endpoint")
 			admissionResponse = wh.validate(&ar)
 		}
 	}
@@ -331,10 +320,66 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// func getLitmusNamespace() (string, error) {
-// 	ns, found := os.LookupEnv("ADMISSION_NAMESPACE")
-// 	if !found {
-// 		return "", fmt.Errorf("%s must be set", "ADMISSION_NAMESPACE")
-// 	}
-// 	return ns, nil
-// }
+func (wh *webhook) validateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) (bool, error) {
+	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
+	case "deployment", "deployments":
+		return validateDeployment(chaosEngine.Spec.Appinfo, wh.kubeClient)
+	case "statefulset", "statefulsets":
+		return validateStatefulSet(chaosEngine.Spec.Appinfo, wh.kubeClient)
+	case "daemonset", "daemonsets":
+		return validateDaemonSet(chaosEngine.Spec.Appinfo, wh.kubeClient)
+	default:
+		return false, fmt.Errorf("Unable to validate resourceType: %v, unsupported resource", resourceType)
+	}
+}
+
+func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
+	deployments, err := kubeClient.AppsV1().Deployments(appInfo.Appns).List(metav1.ListOptions{
+		LabelSelector: appInfo.Applabel,
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to list deployments, please provide a suitable RBAC with apiGroup 'apps', and resource 'deployments' and verb 'list' , or remove this deployment")
+	}
+	if len(deployments.Items) > 1 {
+		return false, fmt.Errorf("multiple deployment resources found, please add unique labels")
+	}
+	if len(deployments.Items) == 0 {
+		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
+	}
+	return true, nil
+
+}
+
+func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
+	statefulsets, err := kubeClient.AppsV1().StatefulSets(appInfo.Appns).List(metav1.ListOptions{
+		LabelSelector: appInfo.Applabel,
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to list statefulsets, please provide a suitable RBAC with apiGroup 'apps', resource 'statefulsets' and verb 'list' , or remove this deployment")
+	}
+	if len(statefulsets.Items) > 1 {
+		return false, fmt.Errorf("multiple statefulset resources found, please add unique labels")
+	}
+	if len(statefulsets.Items) == 0 {
+		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
+	}
+	return true, nil
+
+}
+
+func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
+	daemonsets, err := kubeClient.AppsV1().DaemonSets(appInfo.Appns).List(metav1.ListOptions{
+		LabelSelector: appInfo.Applabel,
+	})
+	if err != nil {
+		return false, fmt.Errorf("unable to fetch daemonsets, please provide a suitable RBAC with apiGroup 'apps', and resource 'daemonsets' and verb 'list', or remove this deployment")
+	}
+	if len(daemonsets.Items) > 1 {
+		return false, fmt.Errorf("multiple daemonset resources found, please add unique labels")
+	}
+	if len(daemonsets.Items) == 0 {
+		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
+	}
+	return true, nil
+
+}

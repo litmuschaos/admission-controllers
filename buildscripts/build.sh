@@ -12,21 +12,17 @@ DIR="$( cd -P "$( dirname "$SOURCE" )/../" && pwd )"
 cd "$DIR"
 
 # Get the git commit
-if [ -f $GOPATH/src/github.com/litmuschaos/litmus-admission-webhook/GITCOMMIT ];
+if [ -f $GOPATH/src/github.com/litmuschaos/admission-controllers/GITCOMMIT ];
 then
-    GIT_COMMIT="$(cat $GOPATH/src/github.com/litmuschaos/litmus-admission-webhook/GITCOMMIT)"
+    GIT_COMMIT="$(cat $GOPATH/src/github.com/litmuschaos/admission-controllers/GITCOMMIT)"
 else
     GIT_COMMIT="$(git rev-parse HEAD)"
 fi
 
-# Set BUILDMETA based on travis tag
-if [[ -n "$TRAVIS_TAG" ]] && [[ $TRAVIS_TAG != *"RC"* ]]; then
-    echo "released" > BUILDMETA
-fi
 
 # Get the version details
-VERSION="$(cat $GOPATH/src/github.com/litmuschaos/litmus-admission-webhook/VERSION)"
-VERSION_META="$(cat $GOPATH/src/github.com/litmuschaos/litmus-admission-webhook/BUILDMETA)"
+VERSION="$(cat $GOPATH/src/github.com/litmuschaos/admission-controllers/VERSION)"
+VERSION_META="$(cat $GOPATH/src/github.com/litmuschaos/admission-controllers/BUILDMETA)"
 
 # Determine the arch/os combos we're building for
 UNAME=$(uname)
@@ -89,10 +85,10 @@ if [ $GOOS = "windows" ]; then
 fi
 
 env GOOS=$GOOS GOARCH=$GOARCH go build ${BUILD_TAG} -ldflags \
-    "-X github.com/litmuschaos/litmus-admission-webhook/pkg/version.GitCommit=${GIT_COMMIT} \
+    "-X github.com/litmuschaos/admission-controllers/pkg/version.GitCommit=${GIT_COMMIT} \
     -X main.CtlName='${CTLNAME}' \
-    -X github.com/litmuschaos/litmus-admission-webhook/pkg/version.Version=${VERSION} \
-    -X github.com/litmuschaos/litmus-admission-webhook/pkg/version.VersionMeta=${VERSION_META}"\
+    -X github.com/litmuschaos/admission-controllers/pkg/version.Version=${VERSION} \
+    -X github.com/litmuschaos/admission-controllers/pkg/version.VersionMeta=${VERSION_META}"\
     -o $output_name\
     ./cmd/${CTLNAME}
 

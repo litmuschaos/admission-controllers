@@ -30,24 +30,26 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/klog/v2"
+
+	version "github.com/litmuschaos/admission-controllers/pkg/version"
 )
 
 const (
-	validatorServiceName = "admission-server-svc"
+	validatorServiceName = "admission-controller-svc"
 	validatorWebhook     = "litmuschaos-validation-webhook-cfg"
-	validatorSecret      = "admission-server-secret"
-	webhookHandlerName   = "admission-webhook.litmuschaos.io"
+	validatorSecret      = "admission-controller-secret"
+	webhookHandlerName   = "admission-controller.litmuschaos.io"
 	validationPath       = "/validate"
 	validationPort       = 8443
-	webhookLabel         = "litmuschaos.io/component-name" + "=" + "admission-webhook"
-	webhooksvcLabel      = "litmuschaos.io/component-name" + "=" + "admission-webhook-svc"
+	webhookLabel         = "litmuschaos.io/component-name" + "=" + "admission-controller"
+	webhooksvcLabel      = "litmuschaos.io/component-name" + "=" + "admission-controller-svc"
 	// AdmissionNameEnvVar is the constant for env variable ADMISSION_WEBHOOK_NAME
 	// which is the name of the current admission webhook
 	AdmissionNameEnvVar = "ADMISSION_WEBHOOK_NAME"
 	appCrt              = "app.crt"
 	appKey              = "app.pem"
 	rootCrt             = "ca.crt"
+	litmuschaosVersion  = "litmuschaos.io/version"
 )
 
 type transformSvcFunc func(*corev1.Service)
@@ -94,7 +96,7 @@ func createWebhookService(
 	}
 
 	// create service resource that refers to admission server pod
-	serviceLabels := map[string]string{"app": "admission-webhook"}
+	serviceLabels := map[string]string{"app": "admission-controller"}
 	svcObj := &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -104,9 +106,9 @@ func createWebhookService(
 			Namespace: namespace,
 			Name:      serviceName,
 			Labels: map[string]string{
-				"app":                            "admission-webhook",
-				"litmuschaos.io/component-name":  "admission-webhook-svc",
-				string("litmuschaos.io/version"): "v1.3.0",
+				"app":                           "admission-controller",
+				"litmuschaos.io/component-name": "admission-controller-svc",
+				string(litmuschaosVersion):      version.Current(),
 			},
 			OwnerReferences: []metav1.OwnerReference{ownerReference},
 		},
@@ -187,9 +189,9 @@ func createAdmissionService(
 		ObjectMeta: metav1.ObjectMeta{
 			Name: validatorWebhook,
 			Labels: map[string]string{
-				"app":                            "admission-webhook",
-				"litmuschaos.io/component-name":  "admission-webhook",
-				string("litmuschaos.io/version"): "v1.3.0",
+				"app":                           "admission-controller",
+				"litmuschaos.io/component-name": "admission-controller",
+				string(litmuschaosVersion):      version.Current(),
 			},
 			OwnerReferences: []metav1.OwnerReference{ownerReference},
 		},
@@ -210,7 +212,6 @@ func createCertsSecret(
 	namespace string,
 	kubeClient *kubernetes.Clientset,
 ) (*corev1.Secret, error) {
-	//klog.Infof("Inside function, which will create a certs secrets")
 	// Create a signing certificate
 	caKeyPair, err := NewCA(fmt.Sprintf("%s-ca", serviceName))
 	if err != nil {
@@ -242,9 +243,9 @@ func createCertsSecret(
 			Name:      secretName,
 			Namespace: namespace,
 			Labels: map[string]string{
-				"app":                            "admission-webhook",
-				"litmuschaos.io/component-name":  "admission-webhook",
-				string("litmuschaos.io/version"): "v1.3.0",
+				"app":                           "admission-controller",
+				"litmuschaos.io/component-name": "admission-controller",
+				string(litmuschaosVersion):      version.Current(),
 			},
 			OwnerReferences: []metav1.OwnerReference{ownerReference},
 		},
@@ -255,9 +256,7 @@ func createCertsSecret(
 			rootCrt: EncodeCertPEM(caKeyPair.Cert),
 		},
 	}
-	//klog.Infof("Printing the newly build Secret: %v", secretObj)
 	return kubeClient.CoreV1().Secrets(namespace).Create(secretObj)
-	//return secret.NewKubeClient(secret.WithNamespace(namespace)).Create(secretObj)
 }
 
 // GetValidatorWebhook fetches the webhook validator resource
@@ -284,7 +283,6 @@ func InitValidationServer(ownerReference metav1.OwnerReference, kubeClient *kube
 	if err != nil {
 		return err
 	}
-	klog.Infof("Namespace: %v", litmusNamespace)
 
 	err = preUpgrade(litmusNamespace, kubeClient)
 	if err != nil {
@@ -293,9 +291,7 @@ func InitValidationServer(ownerReference metav1.OwnerReference, kubeClient *kube
 
 	// Check to see if webhook secret is already present
 	certSecret, err := GetSecret(litmusNamespace, validatorSecret, kubeClient)
-	//klog.Infof("Secret Found: %v,", certSecret)
 	if err != nil {
-		//klog.Infof("Secret Not Found, so creating")
 		if k8serror.IsNotFound(err) {
 			// Secret not found, create certs and the secret object
 			certSecret, err = createCertsSecret(
@@ -377,9 +373,9 @@ func GetSecret(
 // getLitmusNamespace gets the namespace ADMISSION_NAMESPACE env value which is
 // set by the downward API where admission server has been deployed
 func getLitmusNamespace() (string, error) {
-	ns, found := os.LookupEnv("ADMISSION_NAMESPACE")
+	ns, found := os.LookupEnv("LITMUS_NAMESPACE")
 	if !found {
-		return "", fmt.Errorf("%s must be set", "ADMISSION_NAMESPACE")
+		return "", fmt.Errorf("%s must be set", "LITMUS_NAMESPACE")
 	}
 	return ns, nil
 }
@@ -411,8 +407,6 @@ func GetAdmissionReference(kubeClient *kubernetes.Clientset) (*metav1.OwnerRefer
 	if err != nil {
 		return nil, fmt.Errorf("failed to list admission deployment: %s", err.Error())
 	}
-	fmt.Printf("Printing Vital Information\n")
-	fmt.Printf("Printing the List of Deployments found: %v", admdeployList.Items)
 	for _, admdeploy := range admdeployList.Items {
 		if len(admdeploy.Name) != 0 {
 			return metav1.NewControllerRef(admdeploy.GetObjectMeta(), schema.GroupVersionKind{
@@ -427,7 +421,7 @@ func GetAdmissionReference(kubeClient *kubernetes.Clientset) (*metav1.OwnerRefer
 }
 
 // preUpgrade checks for the required older webhook configs,older
-// then 1.4.0 if exists delete them.
+// then 1.3.0 if exists delete them.
 func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error {
 	secretlist, err := kubeClient.CoreV1().Secrets(litmusNamespace).List(metav1.ListOptions{LabelSelector: webhookLabel})
 	if err != nil {
@@ -435,9 +429,8 @@ func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error 
 	}
 
 	for _, scrt := range secretlist.Items {
-		//klog.Infof("Printing Secret found: %v", scrt)
-		if scrt.Labels[string("litmuschaos.io/version")] != "v1.3.0" {
-			if scrt.Labels[string("litmuschaos.io/version")] == "" {
+		if scrt.Labels[string(litmuschaosVersion)] != version.Current() {
+			if scrt.Labels[string(litmuschaosVersion)] == "" {
 				err = kubeClient.CoreV1().Secrets(litmusNamespace).Delete(scrt.Name, &metav1.DeleteOptions{})
 				if err != nil {
 					return fmt.Errorf("failed to delete old secret %s: %s", scrt.Name, err.Error())
@@ -447,7 +440,7 @@ func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error 
 				for _, t := range transformSecret {
 					t(&newScrt)
 				}
-				newScrt.Labels[string("litmuschaos.io/version")] = "v1.3.0"
+				newScrt.Labels[string(litmuschaosVersion)] = version.Current()
 				_, err := kubeClient.CoreV1().Secrets(litmusNamespace).Update(&newScrt)
 				if err != nil {
 					return fmt.Errorf("failed to update old secret %s: %s", scrt.Name, err.Error())
@@ -459,10 +452,9 @@ func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error 
 	if err != nil {
 		return fmt.Errorf("failed to list old service: %s", err.Error())
 	}
-	fmt.Printf("Printing all services found: %v", svcList)
 	for _, service := range svcList.Items {
-		if service.Labels[string("litmuschaos.io/version")] != "v1.3.0" {
-			if service.Labels[string("litmuschaos.io/version")] == "" {
+		if service.Labels[string(litmuschaosVersion)] != version.Current() {
+			if service.Labels[string(litmuschaosVersion)] == "" {
 				err = kubeClient.CoreV1().Services(litmusNamespace).Delete(service.Name, &metav1.DeleteOptions{})
 				if err != nil {
 					return fmt.Errorf("failed to delete old service %s: %s", service.Name, err.Error())
@@ -472,7 +464,7 @@ func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error 
 				for _, t := range transformSvc {
 					t(&newSvc)
 				}
-				newSvc.Labels[string("litmuschaos.io/version")] = "v1.3.0"
+				newSvc.Labels[string(litmuschaosVersion)] = version.Current()
 				_, err = kubeClient.CoreV1().Services(litmusNamespace).Update(&newSvc)
 				if err != nil {
 					return fmt.Errorf("failed to update old service %s: %s", service.Name, err.Error())
@@ -481,14 +473,13 @@ func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error 
 		}
 	}
 	webhookConfigList, err := kubeClient.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().List(metav1.ListOptions{LabelSelector: webhookLabel})
-	//webhookConfigList, err := validate.KubeClient().List(metav1.ListOptions{LabelSelector: webhookLabel})
 	if err != nil {
 		return fmt.Errorf("failed to list older webhook config: %s", err.Error())
 	}
 
 	for _, config := range webhookConfigList.Items {
-		if config.Labels[string("litmuschaos.io/version")] != "v1.3.0" {
-			if config.Labels[string("litmuschaos.io/version")] == "" {
+		if config.Labels[string(litmuschaosVersion)] != version.Current() {
+			if config.Labels[string(litmuschaosVersion)] == "" {
 				err = kubeClient.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().Delete(config.Name, &metav1.DeleteOptions{})
 				if err != nil {
 					return fmt.Errorf("failed to delete older webhook config %s: %s", config.Name, err.Error())
@@ -498,7 +489,7 @@ func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error 
 				for _, t := range transformConfig {
 					t(&newConfig)
 				}
-				newConfig.Labels[string("litmuschaos.io/version")] = "v1.3.0"
+				newConfig.Labels[string(litmuschaosVersion)] = version.Current()
 				_, err = kubeClient.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().Update(&newConfig)
 				if err != nil {
 					return fmt.Errorf("failed to update older webhook config %s: %s", config.Name, err.Error())
