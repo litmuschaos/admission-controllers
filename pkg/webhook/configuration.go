@@ -159,8 +159,6 @@ func createAdmissionService(
 		Rules: []v1beta1.RuleWithOperations{{
 			Operations: []v1beta1.OperationType{
 				v1beta1.Create,
-				v1beta1.Delete,
-				v1beta1.Update,
 			},
 			Rule: v1beta1.Rule{
 				APIGroups:   []string{"litmuschaos.io"},

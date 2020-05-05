@@ -147,10 +147,6 @@ func New(p Parameters, kubeClient kubernetes.Clientset,
 		return nil, err
 	}
 
-	//	pair, err := tls.LoadX509KeyPair(p.CertFile, p.KeyFile)
-	//	if err != nil {
-	//		return nil, err
-	//	}
 	wh := &webhook{
 		Server: &http.Server{
 			Addr:      fmt.Sprintf(":%v", p.Port),
@@ -213,18 +209,6 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		Message: err.Error(),
 	}
 
-	// if chaosEngine.Spec.Appinfo.Appns != "litmus" {
-	// 	klog.V(0).Infof("Got the request successfully, will validate the namespace of application")
-	// 	response.Allowed = false
-	// 	response.Result = &metav1.Status{
-	// 		Status:  metav1.StatusFailure,
-	// 		Code:    http.StatusBadRequest,
-	// 		Reason:  metav1.StatusReasonBadRequest,
-	// 		Message: "Successfully Validated",
-	// 	}
-
-	// }
-
 	return response
 }
 
@@ -232,8 +216,6 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 func (wh *webhook) validate(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	req := ar.Request
 	var (
-		//availableLabels, availableAnnotations map[string]string
-		//objectMeta                            *metav1.ObjectMeta
 		resourceName string
 	)
 	klog.Infof("AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",

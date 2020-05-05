@@ -98,7 +98,7 @@ func main() {
 
 	// listening OS shutdown singal
 	signalChan := make(chan os.Signal, 1)
-	signal.Notify(signalChan, syscall.SIGINT, syscall.SIGKILL, syscall.SIGTERM)
+	signal.Notify(signalChan, syscall.SIGKILL, syscall.SIGTERM)
 	<-signalChan
 
 	klog.Infof("Got OS shutdown signal, shutting down webhook server gracefully...")
