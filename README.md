@@ -3,8 +3,32 @@
 Litmus Admission Webhook is an extension of LitmusChaos Chaos-Operator. This Webhook helps in validating the Chaos target specified in ChaosEngines.
 It will be enhanced for validating the secondary resources such as Application related details, RBAC's, ChaosExperiments, Annotations and much more.
 
-In the current PWD, the admission.yaml could be deployed to see it work. Rightnow, it scope is just to add a log, and validate if the ChaosEngine's AppInfo,AppNamespace is `litmus` or not. But the scope will increase drastically.
 
+## Validation performed
+
+Currently this Webhook validates the application information provided in chaoengine(`.spec.appInfo`).
+    - It validates if the resource searched for exists in the k8s cluster or not.
+
+
+## Installation Steps:
+
+- Using current `litmus` ServiceAccount provided for chaos-operator (https://docs.litmuschaos.io/docs/getstarted/#install-litmus) will work for this deployment, or else a ServiceAccount linked with a ClusterRole with the following permission will work.
+Prefer this deployment to run in parallel with chaos-operator.
+
+```
+rules:
+  - apiGroups: ["","apps","litmuschaos.io"]
+    resources: ["pods","jobs","deployments","replicationcontrollers","daemonsets","replicasets","statefulsets","chaosengines"]
+    verbs: ["get","create","update","patch","delete","list","watch","deletecollection"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingwebhookconfigurations"]
+    verbs: ["get","create","list","delete","update"]
+```
+ 
+- Deploy the `./litmus-admission-controller.yaml` or copy it for changing the ServiceAccount and Namespace.
+
+
+## Sample ValidatingWebhookConfigration created 
 The ValidatingWebhookConfiguration of this webhook would look something like:
 
 ```
