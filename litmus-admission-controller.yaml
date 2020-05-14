@@ -28,9 +28,9 @@ spec:
           image: rahulchheda1997/admission-controllers:ci
           imagePullPolicy: Always
           args:
-            - -alsologtostderr
+            #- -alsologtostderr
             - -v=2
-            - 2>&1
+            #- 2>&1
           env:
             - name: LITMUS_NAMESPACE
               valueFrom:

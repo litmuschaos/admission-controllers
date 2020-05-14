@@ -212,7 +212,7 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 	return response
 }
 
-// validate validates the persistentvolumeclaim(PVC) create, delete request
+// validate validates the chaosengine create, update request
 func (wh *webhook) validate(ar *v1beta1.AdmissionReview) *v1beta1.AdmissionResponse {
 	req := ar.Request
 	var (

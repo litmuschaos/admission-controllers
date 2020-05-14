@@ -1,32 +1,45 @@
 # Litmus-Admission-Controllers
 
-Litmus Admission Webhook is an extension of LitmusChaos Chaos-Operator. This Webhook helps in validating the Chaos target specified in ChaosEngines.
-It will be enhanced for validating the secondary resources such as Application related details, RBAC's, ChaosExperiments, Annotations and much more.
+Litmus Admission Webhook is an extension of LitmusChaos Chaos-Operator. It helps in validating the chaos intent specified in the chaos custom resources (ChaosExperiments, ChaosEngines & ChaosSchedules).
 
-
-## Validation performed
-
-Currently this Webhook validates the application information provided in chaoengine(`.spec.appInfo`).
-    - It validates if the resource searched for exists in the k8s cluster or not.
-
+As of now, this controller helps in validating existence of the application under test (AUT). In subsequent releases, it will be enhanced to perform increased validation of chaos inputs and environmental dependencies, thereby offloading these functions from the chaos-operator/runner. 
 
 ## Installation Steps:
 
 - Using current `litmus` ServiceAccount provided for chaos-operator (https://docs.litmuschaos.io/docs/getstarted/#install-litmus) will work for this deployment, or else a ServiceAccount linked with a ClusterRole with the following permission will work.
 Prefer this deployment to run in parallel with chaos-operator.
-
-```
-rules:
-  - apiGroups: ["","apps","litmuschaos.io"]
-    resources: ["pods","jobs","deployments","replicationcontrollers","daemonsets","replicasets","statefulsets","chaosengines"]
-    verbs: ["get","create","update","patch","delete","list","watch","deletecollection"]
-  - apiGroups: ["admissionregistration.k8s.io"]
-    resources: ["validatingwebhookconfigurations"]
-    verbs: ["get","create","list","delete","update"]
-```
  
-- Deploy the `./litmus-admission-controller.yaml` or copy it for changing the ServiceAccount and Namespace.
+- Deploy the `./litmus-admission-controller.yaml` or use the raw link of that YAML.
 
+
+### Example Validation
+
+- Reference for a Dummy ChaosEngine:
+```
+apiVersion: litmuschaos.io/v1alpha1
+kind: ChaosEngine
+metadata:
+  name: engine
+  namespace: litmus
+spec:
+  monitoring: true
+  appinfo:
+    appkind: deployment
+    applabel: app=nginx
+    appns: litmus
+  chaosServiceAccount: litmus
+  experiments:
+  - name: pod-delete
+
+```
+
+- And, the fields in `.spec.appInfo` specify that a deployment labelled `app=nginx` should exists in `litmus` namespace
+
+- For a failure case, lets assume that this type of deployment does'nt exist. So the response of admission controller, would be something like:
+```
+rahul@rahul-ThinkPad-E490:~$ kubectl apply -f chaos-engine.yaml 
+Error from server (BadRequest): error when creating "chaos-engine.yaml": admission webhook "admission-controller.litmuschaos.io" denied the request: unable to find deployment specified in ChaosEngine
+```
 
 ## Sample ValidatingWebhookConfigration created 
 The ValidatingWebhookConfiguration of this webhook would look something like:
