@@ -20,7 +20,7 @@ spec:
       labels:
         app: admission-controller
         litmuschaos.io/component-name: admission-controller
-        litmuschaos.io/version: 1.3.0
+        litmuschaos.io/version: 1.4.0
     spec:
       serviceAccountName: litmus
       containers:
