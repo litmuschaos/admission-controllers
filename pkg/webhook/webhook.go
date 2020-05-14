@@ -322,9 +322,6 @@ func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernete
 	if err != nil {
 		return false, fmt.Errorf("unable to list deployments, please provide a suitable RBAC with apiGroup 'apps', and resource 'deployments' and verb 'list' , or remove this deployment")
 	}
-	if len(deployments.Items) > 1 {
-		return false, fmt.Errorf("multiple deployment resources found, please add unique labels")
-	}
 	if len(deployments.Items) == 0 {
 		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
 	}
@@ -339,9 +336,6 @@ func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernet
 	if err != nil {
 		return false, fmt.Errorf("unable to list statefulsets, please provide a suitable RBAC with apiGroup 'apps', resource 'statefulsets' and verb 'list' , or remove this deployment")
 	}
-	if len(statefulsets.Items) > 1 {
-		return false, fmt.Errorf("multiple statefulset resources found, please add unique labels")
-	}
 	if len(statefulsets.Items) == 0 {
 		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
 	}
@@ -355,9 +349,6 @@ func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes
 	})
 	if err != nil {
 		return false, fmt.Errorf("unable to fetch daemonsets, please provide a suitable RBAC with apiGroup 'apps', and resource 'daemonsets' and verb 'list', or remove this deployment")
-	}
-	if len(daemonsets.Items) > 1 {
-		return false, fmt.Errorf("multiple daemonset resources found, please add unique labels")
 	}
 	if len(daemonsets.Items) == 0 {
 		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
