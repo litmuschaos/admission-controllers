@@ -25,7 +25,7 @@ spec:
       serviceAccountName: litmus
       containers:
         - name: admission-controller
-          image: rahulchheda1997/admission-controllers:ci
+          image: litmuschaos/admission-controllers:ci
           imagePullPolicy: Always
           args:
             #- -alsologtostderr

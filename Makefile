@@ -3,7 +3,7 @@
 IS_DOCKER_INSTALLED = $(shell which docker >> /dev/null 2>&1; echo $$?)
 # list only our namespaced directories
 PACKAGES = $(shell go list ./... | grep -v '/vendor/')
-ORG?=rahulchheda1997
+ORG?=litmuschaos
 ADMISSION_CONTROLLERS_REPO_NAME?=admission-controllers
 # Specify the name for the binaries
 WEBHOOK=admission-controllers
