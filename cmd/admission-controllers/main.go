@@ -22,14 +22,14 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-
-	litmuschaosv1alpha1 "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned"
-
-	"github.com/litmuschaos/admission-controllers/pkg/webhook"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog"
+
+	litmuschaosv1alpha1 "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned"
+
+	"github.com/litmuschaos/admission-controllers/pkg/webhook"
 )
 
 var (
