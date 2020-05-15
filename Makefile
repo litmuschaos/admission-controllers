@@ -37,6 +37,13 @@ _build_check_docker:
 		&& exit 1; \
 		fi;
 
+.PHONY: test
+test:
+	@echo "------------------"
+	@echo "--> Run Go Test"
+	@echo "------------------"
+	@go test ./... -v
+
 .PHONY: gotasks
 gotasks: format lint
 
