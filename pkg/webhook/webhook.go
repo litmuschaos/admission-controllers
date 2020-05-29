@@ -23,7 +23,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 	"strings"
+
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/apps/v1"
@@ -36,6 +38,12 @@ import (
 
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
 	litmuschaosv1alpha1 "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned"
+)
+
+// Annotations on app to enable chaos on it
+const (
+	ChaosAnnotationValue      = "true"
+	DefaultChaosAnnotationKey = "litmuschaos.io/chaos"
 )
 
 var (
@@ -54,8 +62,23 @@ var (
 		metav1.NamespaceSystem,
 		metav1.NamespacePublic,
 	}
-	snapshotAnnotation = "snapshot.alpha.kubernetes.io/snapshot"
 )
+
+var (
+	// ChaosAnnotationKey is global variable used as the Key for annotation check.
+	ChaosAnnotationKey = getAnnotationKey()
+)
+
+// getAnnotationKey returns the annotation to be used while validating applications.
+func getAnnotationKey() string {
+
+	annotationKey := os.Getenv("CUSTOM_ANNOTATION")
+	if len(annotationKey) != 0 {
+		return annotationKey
+	}
+	return DefaultChaosAnnotationKey
+
+}
 
 // webhook implements a validating webhook.
 type webhook struct {
@@ -192,7 +215,7 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		return response
 	}
 
-	validationStatus, err := wh.validateChaosTarget(&chaosEngine)
+	validationStatus, err := wh.validateAnnotation(&chaosEngine)
 	if validationStatus {
 		klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
 		response.Allowed = true
@@ -209,6 +232,35 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 	}
 
 	return response
+}
+
+func getAnnotationCheck(engine *v1alpha1.ChaosEngine) error {
+	if engine.Spec.AnnotationCheck == "" {
+		engine.Spec.AnnotationCheck = "true"
+	}
+
+	if engine.Spec.AnnotationCheck != "true" && engine.Spec.AnnotationCheck != "false" {
+		return fmt.Errorf("annotationCheck '%s', is not supported it should be true or false", engine.Spec.AnnotationCheck)
+	}
+	return nil
+}
+
+func (wh *webhook) validateAnnotation(engine *v1alpha1.ChaosEngine) (bool, error) {
+	//getAnnotationCheck fetch the annotationCheck from engine spec
+	err := getAnnotationCheck(engine)
+	if err != nil {
+		return false, err
+	}
+
+	if engine.Spec.AnnotationCheck == "true" {
+		// Determine whether apps with matching labels have chaos annotation set to true
+		validationBool, err := wh.validateChaosTarget(engine)
+		if err != nil {
+			klog.V(2).Infof("Annotation check failed with error: %v", err)
+			return validationBool, err
+		}
+	}
+	return true, nil
 }
 
 // validate validates the chaosengine create, update request
@@ -319,10 +371,14 @@ func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernete
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to list deployments, please provide a suitable RBAC with apiGroup 'apps', and resource 'deployments' and verb 'list' , or remove this deployment")
+		return false, fmt.Errorf("unable to list deployments, please provide a suitable RBAC with apiGroup 'apps', resource 'deployments' and verb 'list' , or remove this deployment")
 	}
-	if len(deployments.Items) == 0 {
-		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
+	chaosEnabledDeployment, err := checkForChaosEnabledDeployment(deployments, appInfo)
+	if err != nil {
+		return false, err
+	}
+	if chaosEnabledDeployment == 0 {
+		return false, fmt.Errorf("no chaos-candidate found")
 	}
 	return true, nil
 
@@ -335,8 +391,12 @@ func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernet
 	if err != nil {
 		return false, fmt.Errorf("unable to list statefulsets, please provide a suitable RBAC with apiGroup 'apps', resource 'statefulsets' and verb 'list' , or remove this deployment")
 	}
-	if len(statefulsets.Items) == 0 {
-		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
+	chaosEnabledStatefulSet, err := checkForChaosEnabledStatefulSet(statefulsets, appInfo)
+	if err != nil {
+		return false, err
+	}
+	if chaosEnabledStatefulSet == 0 {
+		return false, fmt.Errorf("no chaos-candidate found")
 	}
 	return true, nil
 
@@ -349,9 +409,57 @@ func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes
 	if err != nil {
 		return false, fmt.Errorf("unable to fetch daemonsets, please provide a suitable RBAC with apiGroup 'apps', and resource 'daemonsets' and verb 'list', or remove this deployment")
 	}
-	if len(daemonsets.Items) == 0 {
-		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
+	chaosEnabledDaemonSet, err := checkForChaosEnabledDaemonSet(daemonsets, appInfo)
+	if err != nil {
+		return false, err
+	}
+	if chaosEnabledDaemonSet == 0 {
+		return false, fmt.Errorf("no chaos-candidate found")
 	}
 	return true, nil
 
+}
+
+func checkForChaosEnabledDeployment(deployments *v1.DeploymentList, appInfo v1alpha1.ApplicationParams) (int, error) {
+	chaosEnabledDeployment := 0
+	for _, deployment := range deployments.Items {
+		annotationValue := deployment.ObjectMeta.GetAnnotations()[ChaosAnnotationKey]
+		chaosEnabledDeployment = CountTotalChaosEnabled(annotationValue, chaosEnabledDeployment)
+		if chaosEnabledDeployment > 1 {
+			return chaosEnabledDeployment, fmt.Errorf("too many deployments with specified label are annotated for chaos, either provide unique labels or annotate only desired app for chaos")
+		}
+	}
+	return chaosEnabledDeployment, nil
+}
+
+func checkForChaosEnabledStatefulSet(statefulsets *v1.StatefulSetList, appInfo v1alpha1.ApplicationParams) (int, error) {
+	chaosEnabledStatefulSet := 0
+	for _, statefulset := range statefulsets.Items {
+		annotationValue := statefulset.ObjectMeta.GetAnnotations()[ChaosAnnotationKey]
+		chaosEnabledStatefulSet = CountTotalChaosEnabled(annotationValue, chaosEnabledStatefulSet)
+		if chaosEnabledStatefulSet > 1 {
+			return chaosEnabledStatefulSet, fmt.Errorf("too many deployments with specified label are annotated for chaos, either provide unique labels or annotate only desired app for chaos")
+		}
+	}
+	return chaosEnabledStatefulSet, nil
+}
+
+func checkForChaosEnabledDaemonSet(daemonsets *v1.DaemonSetList, appInfo v1alpha1.ApplicationParams) (int, error) {
+	chaosEnabledDaemonSet := 0
+	for _, daemonset := range daemonsets.Items {
+		annotationValue := daemonset.ObjectMeta.GetAnnotations()[ChaosAnnotationKey]
+		chaosEnabledDaemonSet = CountTotalChaosEnabled(annotationValue, chaosEnabledDaemonSet)
+		if chaosEnabledDaemonSet > 1 {
+			return chaosEnabledDaemonSet, fmt.Errorf("too many deployments with specified label are annotated for chaos, either provide unique labels or annotate only desired app for chaos")
+		}
+	}
+	return chaosEnabledDaemonSet, nil
+}
+
+// CountTotalChaosEnabled will count the number of chaos enabled applications
+func CountTotalChaosEnabled(annotationValue string, chaosCandidates int) int {
+	if annotationValue == ChaosAnnotationValue {
+		chaosCandidates++
+	}
+	return chaosCandidates
 }
