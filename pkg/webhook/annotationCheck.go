@@ -45,7 +45,7 @@ func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernete
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to list deployments, please provide a suitable RBAC with apiGroup 'apps', and resource 'deployments' and verb 'list' , or remove this deployment")
+		return false, fmt.Errorf("unable to list deployments with matching labels, please check the following error: %v", err)
 	}
 	if len(deployments.Items) == 0 {
 		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
@@ -59,7 +59,7 @@ func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernet
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to list statefulsets, please provide a suitable RBAC with apiGroup 'apps', resource 'statefulsets' and verb 'list' , or remove this deployment")
+		return false, fmt.Errorf("unable to list statefulsets with matching labels, please check the following error: %v", err)
 	}
 	if len(statefulsets.Items) == 0 {
 		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
@@ -73,7 +73,7 @@ func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to fetch daemonsets, please provide a suitable RBAC with apiGroup 'apps', and resource 'daemonsets' and verb 'list', or remove this deployment")
+		return false, fmt.Errorf("unable to list daemonsets with matching labels, please check the following error: %v", err)
 	}
 	if len(daemonsets.Items) == 0 {
 		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
