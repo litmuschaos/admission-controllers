@@ -23,7 +23,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"strings"
+	"os"
+
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
 	v1 "k8s.io/api/apps/v1"
@@ -36,6 +37,12 @@ import (
 
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
 	litmuschaosv1alpha1 "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned"
+)
+
+// Annotations on app to enable chaos on it
+const (
+	ChaosAnnotationValue      = "true"
+	DefaultChaosAnnotationKey = "litmuschaos.io/chaos"
 )
 
 var (
@@ -54,8 +61,23 @@ var (
 		metav1.NamespaceSystem,
 		metav1.NamespacePublic,
 	}
-	snapshotAnnotation = "snapshot.alpha.kubernetes.io/snapshot"
 )
+
+var (
+	// ChaosAnnotationKey is global variable used as the Key for annotation check.
+	ChaosAnnotationKey = getAnnotationKey()
+)
+
+// getAnnotationKey returns the annotation to be used while validating applications.
+func getAnnotationKey() string {
+
+	annotationKey := os.Getenv("CUSTOM_ANNOTATION")
+	if len(annotationKey) != 0 {
+		return annotationKey
+	}
+	return DefaultChaosAnnotationKey
+
+}
 
 // webhook implements a validating webhook.
 type webhook struct {
@@ -192,7 +214,7 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		return response
 	}
 
-	validationStatus, err := wh.validateChaosTarget(&chaosEngine)
+	validationStatus, err := wh.ValidateChaosTarget(&chaosEngine)
 	if validationStatus {
 		klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
 		response.Allowed = true
@@ -209,6 +231,35 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 	}
 
 	return response
+}
+
+func getAnnotationCheck(engine *v1alpha1.ChaosEngine) error {
+	if engine.Spec.AnnotationCheck == "" {
+		engine.Spec.AnnotationCheck = "true"
+	}
+
+	if engine.Spec.AnnotationCheck != "true" && engine.Spec.AnnotationCheck != "false" {
+		return fmt.Errorf("annotationCheck '%s', is not supported it should be true or false", engine.Spec.AnnotationCheck)
+	}
+	return nil
+}
+
+func (wh *webhook) validateAnnotation(engine *v1alpha1.ChaosEngine) (bool, error) {
+	//getAnnotationCheck fetch the annotationCheck from engine spec
+	err := getAnnotationCheck(engine)
+	if err != nil {
+		return false, err
+	}
+
+	if engine.Spec.AnnotationCheck == "true" {
+		// Determine whether apps with matching labels have chaos annotation set to true
+		validationBool, err := wh.ValidateChaosTarget(engine)
+		if err != nil {
+			klog.V(2).Infof("Annotation check failed with error: %v", err)
+			return validationBool, err
+		}
+	}
+	return true, nil
 }
 
 // validate validates the chaosengine create, update request
@@ -299,59 +350,4 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 		klog.Errorf("Can't write response: %v", err)
 		http.Error(w, fmt.Sprintf("could not write response: %v", err), http.StatusInternalServerError)
 	}
-}
-
-func (wh *webhook) validateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) (bool, error) {
-	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
-	case "deployment", "deployments":
-		return validateDeployment(chaosEngine.Spec.Appinfo, wh.kubeClient)
-	case "statefulset", "statefulsets":
-		return validateStatefulSet(chaosEngine.Spec.Appinfo, wh.kubeClient)
-	case "daemonset", "daemonsets":
-		return validateDaemonSet(chaosEngine.Spec.Appinfo, wh.kubeClient)
-	default:
-		return false, fmt.Errorf("Unable to validate resourceType: %v, unsupported resource", resourceType)
-	}
-}
-
-func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
-	deployments, err := kubeClient.AppsV1().Deployments(appInfo.Appns).List(metav1.ListOptions{
-		LabelSelector: appInfo.Applabel,
-	})
-	if err != nil {
-		return false, fmt.Errorf("unable to list deployments, please provide a suitable RBAC with apiGroup 'apps', and resource 'deployments' and verb 'list' , or remove this deployment")
-	}
-	if len(deployments.Items) == 0 {
-		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
-	}
-	return true, nil
-
-}
-
-func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
-	statefulsets, err := kubeClient.AppsV1().StatefulSets(appInfo.Appns).List(metav1.ListOptions{
-		LabelSelector: appInfo.Applabel,
-	})
-	if err != nil {
-		return false, fmt.Errorf("unable to list statefulsets, please provide a suitable RBAC with apiGroup 'apps', resource 'statefulsets' and verb 'list' , or remove this deployment")
-	}
-	if len(statefulsets.Items) == 0 {
-		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
-	}
-	return true, nil
-
-}
-
-func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
-	daemonsets, err := kubeClient.AppsV1().DaemonSets(appInfo.Appns).List(metav1.ListOptions{
-		LabelSelector: appInfo.Applabel,
-	})
-	if err != nil {
-		return false, fmt.Errorf("unable to fetch daemonsets, please provide a suitable RBAC with apiGroup 'apps', and resource 'daemonsets' and verb 'list', or remove this deployment")
-	}
-	if len(daemonsets.Items) == 0 {
-		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
-	}
-	return true, nil
-
 }
