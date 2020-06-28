@@ -50,6 +50,13 @@ func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernete
 	if len(deployments.Items) == 0 {
 		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
 	}
+
+	for _, deployment := range deployments.Items {
+		if err := validatePodTemplateSpec(appInfo, deployment.Spec.Template); err != nil {
+			return false, fmt.Errorf("unable to find labels in pod template of deployment provided")
+		}
+	}
+
 	return true, nil
 
 }
@@ -63,6 +70,12 @@ func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernet
 	}
 	if len(statefulsets.Items) == 0 {
 		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
+	}
+
+	for _, statefulset := range statefulsets.Items {
+		if err := validatePodTemplateSpec(appInfo, statefulset.Spec.Template); err != nil {
+			return false, fmt.Errorf("unable to find labels in pod template of statefulset provided")
+		}
 	}
 	return true, nil
 
@@ -78,12 +91,19 @@ func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes
 	if len(daemonsets.Items) == 0 {
 		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
 	}
+
+	for _, daemonset := range daemonsets.Items {
+		if err := validatePodTemplateSpec(appInfo, daemonset.Spec.Template); err != nil {
+			return false, fmt.Errorf("unable to find labels in pod template of daemonset provided")
+		}
+	}
+
 	return true, nil
 
 }
 
-func validatePodTemplateSpec(engine *v1alpha1.ChaosEngine, podTemplateSpec corev1.PodTemplateSpec) error {
-	appLabel := strings.Split(engine.Spec.Appinfo.Applabel, "=")
+func validatePodTemplateSpec(appInfo v1alpha1.ApplicationParams, podTemplateSpec corev1.PodTemplateSpec) error {
+	appLabel := strings.Split(appInfo.Applabel, "=")
 	labelFound := checkLabelInMap(appLabel, podTemplateSpec.Labels)
 	if !labelFound {
 		return fmt.Errorf("Unable to validate appLabel provided in ChaosEngine in PodTemplateSpec")
