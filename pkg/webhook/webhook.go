@@ -213,23 +213,20 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		}
 		return response
 	}
-
-	validationStatus, err := wh.ValidateChaosTarget(&chaosEngine)
-	if validationStatus {
-		klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
-		response.Allowed = true
-		return response
+	err = wh.ValidateChaosTarget(&chaosEngine)
+	if err != nil {
+		klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
+		response.Allowed = false
+		response.Result = &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Code:    http.StatusBadRequest,
+			Reason:  metav1.StatusReasonBadRequest,
+			Message: err.Error(),
+		}
 	}
 
-	klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
-	response.Allowed = false
-	response.Result = &metav1.Status{
-		Status:  metav1.StatusFailure,
-		Code:    http.StatusBadRequest,
-		Reason:  metav1.StatusReasonBadRequest,
-		Message: err.Error(),
-	}
-
+	klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
+	response.Allowed = true
 	return response
 }
 
@@ -242,24 +239,6 @@ func getAnnotationCheck(engine *v1alpha1.ChaosEngine) error {
 		return fmt.Errorf("annotationCheck '%s', is not supported it should be true or false", engine.Spec.AnnotationCheck)
 	}
 	return nil
-}
-
-func (wh *webhook) validateAnnotation(engine *v1alpha1.ChaosEngine) (bool, error) {
-	//getAnnotationCheck fetch the annotationCheck from engine spec
-	err := getAnnotationCheck(engine)
-	if err != nil {
-		return false, err
-	}
-
-	if engine.Spec.AnnotationCheck == "true" {
-		// Determine whether apps with matching labels have chaos annotation set to true
-		validationBool, err := wh.ValidateChaosTarget(engine)
-		if err != nil {
-			klog.V(2).Infof("Annotation check failed with error: %v", err)
-			return validationBool, err
-		}
-	}
-	return true, nil
 }
 
 // validate validates the chaosengine create, update request
