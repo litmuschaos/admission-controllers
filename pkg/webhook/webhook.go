@@ -181,23 +181,6 @@ func New(p Parameters, kubeClient kubernetes.Clientset,
 	return wh, nil
 }
 
-func admissionRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
-	// skip special kubernetes system namespaces
-	for _, namespace := range ignoredList {
-		if metadata.Namespace == namespace {
-			klog.V(4).Infof("Skip validation for %v for it's in special namespace:%v", metadata.Name, metadata.Namespace)
-			return false
-		}
-	}
-	return true
-}
-
-func validationRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
-	required := admissionRequired(ignoredList, metadata)
-	klog.V(4).Infof("Validation policy for %v/%v: required:%v", metadata.Namespace, metadata.Name, required)
-	return required
-}
-
 func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
 	response := &v1beta1.AdmissionResponse{}
 	response.Allowed = true
