@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -213,7 +214,7 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		}
 		return response
 	}
-	err = wh.ValidateChaosTarget(&chaosEngine)
+	err = wh.CollectValidationErrors(&chaosEngine, wh.ValidateChaosTarget)
 	if err != nil {
 		klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
 		response.Allowed = false
@@ -228,17 +229,6 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 	klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
 	response.Allowed = true
 	return response
-}
-
-func getAnnotationCheck(engine *v1alpha1.ChaosEngine) error {
-	if engine.Spec.AnnotationCheck == "" {
-		engine.Spec.AnnotationCheck = "true"
-	}
-
-	if engine.Spec.AnnotationCheck != "true" && engine.Spec.AnnotationCheck != "false" {
-		return fmt.Errorf("annotationCheck '%s', is not supported it should be true or false", engine.Spec.AnnotationCheck)
-	}
-	return nil
 }
 
 // validate validates the chaosengine create, update request
@@ -329,4 +319,20 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 		klog.Errorf("Can't write response: %v", err)
 		http.Error(w, fmt.Sprintf("could not write response: %v", err), http.StatusInternalServerError)
 	}
+}
+
+func (wh *webhook) CollectValidationErrors(ce *v1alpha1.ChaosEngine, fs ...func(*v1alpha1.ChaosEngine) error) error {
+
+	var longError []string
+	for _, f := range fs {
+		if shortErr := f(ce); shortErr != nil {
+			longError = append(longError, shortErr.Error())
+		}
+	}
+
+	if len(longError) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(strings.Join(longError, "\n"))
 }
