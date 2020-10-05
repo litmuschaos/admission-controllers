@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"strings"
 
 	"k8s.io/api/admission/v1beta1"
 	admissionregistrationv1beta1 "k8s.io/api/admissionregistration/v1beta1"
@@ -180,23 +181,6 @@ func New(p Parameters, kubeClient kubernetes.Clientset,
 	return wh, nil
 }
 
-func admissionRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
-	// skip special kubernetes system namespaces
-	for _, namespace := range ignoredList {
-		if metadata.Namespace == namespace {
-			klog.V(4).Infof("Skip validation for %v for it's in special namespace:%v", metadata.Name, metadata.Namespace)
-			return false
-		}
-	}
-	return true
-}
-
-func validationRequired(ignoredList []string, metadata *metav1.ObjectMeta) bool {
-	required := admissionRequired(ignoredList, metadata)
-	klog.V(4).Infof("Validation policy for %v/%v: required:%v", metadata.Namespace, metadata.Name, required)
-	return required
-}
-
 func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest) *v1beta1.AdmissionResponse {
 	response := &v1beta1.AdmissionResponse{}
 	response.Allowed = true
@@ -213,53 +197,21 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		}
 		return response
 	}
-
-	validationStatus, err := wh.ValidateChaosTarget(&chaosEngine)
-	if validationStatus {
-		klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
-		response.Allowed = true
-		return response
-	}
-
-	klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
-	response.Allowed = false
-	response.Result = &metav1.Status{
-		Status:  metav1.StatusFailure,
-		Code:    http.StatusBadRequest,
-		Reason:  metav1.StatusReasonBadRequest,
-		Message: err.Error(),
-	}
-
-	return response
-}
-
-func getAnnotationCheck(engine *v1alpha1.ChaosEngine) error {
-	if engine.Spec.AnnotationCheck == "" {
-		engine.Spec.AnnotationCheck = "true"
-	}
-
-	if engine.Spec.AnnotationCheck != "true" && engine.Spec.AnnotationCheck != "false" {
-		return fmt.Errorf("annotationCheck '%s', is not supported it should be true or false", engine.Spec.AnnotationCheck)
-	}
-	return nil
-}
-
-func (wh *webhook) validateAnnotation(engine *v1alpha1.ChaosEngine) (bool, error) {
-	//getAnnotationCheck fetch the annotationCheck from engine spec
-	err := getAnnotationCheck(engine)
+	err = wh.CollectValidationErrors(&chaosEngine, wh.ValidateChaosTarget)
 	if err != nil {
-		return false, err
-	}
-
-	if engine.Spec.AnnotationCheck == "true" {
-		// Determine whether apps with matching labels have chaos annotation set to true
-		validationBool, err := wh.ValidateChaosTarget(engine)
-		if err != nil {
-			klog.V(2).Infof("Annotation check failed with error: %v", err)
-			return validationBool, err
+		klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
+		response.Allowed = false
+		response.Result = &metav1.Status{
+			Status:  metav1.StatusFailure,
+			Code:    http.StatusBadRequest,
+			Reason:  metav1.StatusReasonBadRequest,
+			Message: err.Error(),
 		}
 	}
-	return true, nil
+
+	klog.V(2).Infof("Validation Successful for ChaosEngine: %v", chaosEngine.Name)
+	response.Allowed = true
+	return response
 }
 
 // validate validates the chaosengine create, update request
@@ -350,4 +302,24 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 		klog.Errorf("Can't write response: %v", err)
 		http.Error(w, fmt.Sprintf("could not write response: %v", err), http.StatusInternalServerError)
 	}
+}
+
+func (wh *webhook) CollectValidationErrors(ce *v1alpha1.ChaosEngine, fs ...func(*v1alpha1.ChaosEngine) error) error {
+
+	// Collects all the errors from Chaos Engine validation functions
+	// and returns a joint error, easier for debugging
+	var longError []string
+
+	// Loop over all the functions appended to this function for validation
+	for _, f := range fs {
+		if shortErr := f(ce); shortErr != nil {
+			longError = append(longError, shortErr.Error())
+		}
+	}
+
+	if len(longError) == 0 {
+		return nil
+	}
+
+	return fmt.Errorf(strings.Join(longError, "\n"))
 }

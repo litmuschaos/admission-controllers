@@ -27,7 +27,7 @@ import (
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
 )
 
-func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) (bool, error) {
+func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error {
 	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
 	case "deployment", "deployments":
 		return validateDeployment(chaosEngine.Spec.Appinfo, wh.kubeClient)
@@ -36,69 +36,69 @@ func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) (bool,
 	case "daemonset", "daemonsets":
 		return validateDaemonSet(chaosEngine.Spec.Appinfo, wh.kubeClient)
 	default:
-		return false, fmt.Errorf("Unable to validate resourceType: %v, unsupported resource", resourceType)
+		return fmt.Errorf("Unable to validate resourceType: %v, unsupported resource", resourceType)
 	}
 }
 
-func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
+func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) error {
 	deployments, err := kubeClient.AppsV1().Deployments(appInfo.Appns).List(metav1.ListOptions{
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to list deployments with matching labels, please check the following error: %v", err)
+		return fmt.Errorf("unable to list deployments with matching labels, please check the following error: %v", err)
 	}
 	if len(deployments.Items) == 0 {
-		return false, fmt.Errorf("unable to find deployment specified in ChaosEngine")
+		return fmt.Errorf("unable to find deployment specified in ChaosEngine")
 	}
 
 	for _, deployment := range deployments.Items {
 		if err := validatePodTemplateSpec(appInfo, deployment.Spec.Template); err != nil {
-			return false, fmt.Errorf("unable to find labels in pod template of deployment provided")
+			return fmt.Errorf("unable to find labels in pod template of deployment provided")
 		}
 	}
 
-	return true, nil
+	return nil
 
 }
 
-func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
+func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) error {
 	statefulsets, err := kubeClient.AppsV1().StatefulSets(appInfo.Appns).List(metav1.ListOptions{
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to list statefulsets with matching labels, please check the following error: %v", err)
+		return fmt.Errorf("unable to list statefulsets with matching labels, please check the following error: %v", err)
 	}
 	if len(statefulsets.Items) == 0 {
-		return false, fmt.Errorf("unable to find statefulset specified in ChaosEngine")
+		return fmt.Errorf("unable to find statefulset specified in ChaosEngine")
 	}
 
 	for _, statefulset := range statefulsets.Items {
 		if err := validatePodTemplateSpec(appInfo, statefulset.Spec.Template); err != nil {
-			return false, fmt.Errorf("unable to find labels in pod template of statefulset provided")
+			return fmt.Errorf("unable to find labels in pod template of statefulset provided")
 		}
 	}
-	return true, nil
+	return nil
 
 }
 
-func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) (bool, error) {
+func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) error {
 	daemonsets, err := kubeClient.AppsV1().DaemonSets(appInfo.Appns).List(metav1.ListOptions{
 		LabelSelector: appInfo.Applabel,
 	})
 	if err != nil {
-		return false, fmt.Errorf("unable to list daemonsets with matching labels, please check the following error: %v", err)
+		return fmt.Errorf("unable to list daemonsets with matching labels, please check the following error: %v", err)
 	}
 	if len(daemonsets.Items) == 0 {
-		return false, fmt.Errorf("unable to find daemonset specified in ChaosEngine")
+		return fmt.Errorf("unable to find daemonset specified in ChaosEngine")
 	}
 
 	for _, daemonset := range daemonsets.Items {
 		if err := validatePodTemplateSpec(appInfo, daemonset.Spec.Template); err != nil {
-			return false, fmt.Errorf("unable to find labels in pod template of daemonset provided")
+			return fmt.Errorf("unable to find labels in pod template of daemonset provided")
 		}
 	}
 
-	return true, nil
+	return nil
 
 }
 
