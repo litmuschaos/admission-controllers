@@ -306,7 +306,11 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 
 func (wh *webhook) CollectValidationErrors(ce *v1alpha1.ChaosEngine, fs ...func(*v1alpha1.ChaosEngine) error) error {
 
+	// Collects all the errors from Chaos Engine validation functions
+	// and returns a joint error, easier for debugging
 	var longError []string
+
+	// Loop over all the functions appended to this function for validation
 	for _, f := range fs {
 		if shortErr := f(ce); shortErr != nil {
 			longError = append(longError, shortErr.Error())
