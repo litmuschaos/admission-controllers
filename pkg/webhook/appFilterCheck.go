@@ -27,6 +27,47 @@ import (
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
 )
 
+func (wh *webhook) ValidateChaosExperimentsConfigMaps(chaosEngine *v1alpha1.ChaosEngine) error {
+	configMaps, err := wh.kubeClient.CoreV1().ConfigMaps(chaosEngine.Spec.Appinfo.Appns).List(metav1.ListOptions{
+		LabelSelector: chaosEngine.Spec.Appinfo.Applabel,
+	})
+	if err != nil {
+		return fmt.Errorf("unable to list ConfigMaps with matching labels, please check the following error: %v", err)
+	}
+	configMapErrors := make([]string, 0)
+	for _, experiment := range chaosEngine.Spec.Experiments {
+		if err = validateSingleExperimentConfigMaps(experiment, configMaps); err != nil {
+			configMapErrors = append(configMapErrors, err.Error())
+		}
+	}
+	if len(configMapErrors) == 0 {
+		return nil
+	}
+	return fmt.Errorf(strings.Join(configMapErrors, "\n"))
+}
+
+func validateSingleExperimentConfigMaps(chaosExperiment v1alpha1.ExperimentList, namespaceConfigMaps *corev1.ConfigMapList) error {
+	missingConfigMaps := make([]string, 0)
+	for _, expectedConfigMap := range chaosExperiment.Spec.Components.ConfigMaps {
+		if !isConfigMapExisting(expectedConfigMap.Name, namespaceConfigMaps) {
+			missingConfigMaps = append(missingConfigMaps, expectedConfigMap.Name)
+		}
+	}
+	if len(missingConfigMaps) > 0 {
+		return fmt.Errorf("Unable to find ConfigMaps %v needed for ChaosExperiment %s", missingConfigMaps, chaosExperiment.Name)
+	}
+	return nil
+}
+
+func isConfigMapExisting(toCheck string, existingConfigMaps *corev1.ConfigMapList) bool {
+	for _, existingConfigMap := range existingConfigMaps.Items {
+		if existingConfigMap.Name == toCheck {
+			return true
+		}
+	}
+	return false
+}
+
 func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error {
 	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
 	case "deployment", "deployments":
