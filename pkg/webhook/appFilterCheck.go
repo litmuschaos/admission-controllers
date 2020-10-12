@@ -44,6 +44,23 @@ func (wh *webhook) ValidateChaosExperimentsConfigMaps(chaosEngine *v1alpha1.Chao
 	return fmt.Errorf(strings.Join(configMapErrors, "\n"))
 }
 
+func (wh *webhook) ValidateChaosExperimentsSecrets(chaosEngine *v1alpha1.ChaosEngine) error {
+	secretsErrors := make([]string, 0)
+	for _, experiment := range chaosEngine.Spec.Experiments {
+		for _, expectedSecret := range experiment.Spec.Components.Secrets {
+			_, err := wh.kubeClient.CoreV1().Secrets(chaosEngine.Spec.Appinfo.Appns).Get(expectedSecret.Name, metav1.GetOptions{})
+			if err != nil {
+				secretsErrors = append(secretsErrors,
+					fmt.Sprintf("Unable to find Secret %s needed for ChaosExperiment %s, please check the following error: %v", expectedSecret.Name, experiment.Name, err))
+			}
+		}
+	}
+	if len(secretsErrors) == 0 {
+		return nil
+	}
+	return fmt.Errorf(strings.Join(secretsErrors, "\n"))
+}
+
 func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error {
 	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
 	case "deployment", "deployments":
