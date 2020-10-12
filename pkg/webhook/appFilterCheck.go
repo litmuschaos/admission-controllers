@@ -27,6 +27,23 @@ import (
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
 )
 
+func (wh *webhook) ValidateChaosExperimentsConfigMaps(chaosEngine *v1alpha1.ChaosEngine) error {
+	configMapErrors := make([]string, 0)
+	for _, experiment := range chaosEngine.Spec.Experiments {
+		for _, expectedConfigMap := range experiment.Spec.Components.ConfigMaps {
+			_, err := wh.kubeClient.CoreV1().ConfigMaps(chaosEngine.Spec.Appinfo.Appns).Get(expectedConfigMap.Name, metav1.GetOptions{})
+			if err != nil {
+				configMapErrors = append(configMapErrors,
+					fmt.Sprintf("Unable to find ConfigMap %s needed for ChaosExperiment %s, please check the following error: %v", expectedConfigMap.Name, experiment.Name, err))
+			}
+		}
+	}
+	if len(configMapErrors) == 0 {
+		return nil
+	}
+	return fmt.Errorf(strings.Join(configMapErrors, "\n"))
+}
+
 func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error {
 	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
 	case "deployment", "deployments":
