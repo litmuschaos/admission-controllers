@@ -76,7 +76,7 @@ func createWebhookService(
 	ownerReference metav1.OwnerReference,
 	serviceName string,
 	namespace string,
-	kubeClient *kubernetes.Clientset,
+	kubeClient kubernetes.Interface,
 ) error {
 
 	_, err := kubeClient.CoreV1().Services(namespace).
@@ -136,7 +136,7 @@ func createAdmissionService(
 	namespace string,
 	serviceName string,
 	signingCert []byte,
-	kubeClient *kubernetes.Clientset,
+	kubeClient kubernetes.Interface,
 ) error {
 
 	_, err := GetValidatorWebhook(validatorWebhook, kubeClient)
@@ -208,7 +208,7 @@ func createCertsSecret(
 	secretName string,
 	serviceName string,
 	namespace string,
-	kubeClient *kubernetes.Clientset,
+	kubeClient kubernetes.Interface,
 ) (*corev1.Secret, error) {
 	// Create a signing certificate
 	caKeyPair, err := NewCA(fmt.Sprintf("%s-ca", serviceName))
@@ -260,7 +260,7 @@ func createCertsSecret(
 // GetValidatorWebhook fetches the webhook validator resource
 func GetValidatorWebhook(
 	validator string,
-	kubeClient *kubernetes.Clientset,
+	kubeClient kubernetes.Interface,
 ) (*v1beta1.ValidatingWebhookConfiguration, error) {
 
 	return kubeClient.AdmissionregistrationV1beta1().ValidatingWebhookConfigurations().Get(validator, metav1.GetOptions{})
@@ -274,7 +274,7 @@ func StrPtr(s string) *string {
 // InitValidationServer creates secret, service and admission validation k8s
 // resources. All these resources are created in the same namespace where
 // litmus components is running.
-func InitValidationServer(ownerReference metav1.OwnerReference, kubeClient *kubernetes.Clientset) error {
+func InitValidationServer(ownerReference metav1.OwnerReference, kubeClient kubernetes.Interface) error {
 
 	// Fetch our namespace
 	litmusNamespace, err := getLitmusNamespace()
@@ -362,7 +362,7 @@ func InitValidationServer(ownerReference metav1.OwnerReference, kubeClient *kube
 func GetSecret(
 	namespace string,
 	secretName string,
-	kubeClient *kubernetes.Clientset,
+	kubeClient kubernetes.Interface,
 ) (*corev1.Secret, error) {
 
 	return kubeClient.CoreV1().Secrets(namespace).Get(secretName, metav1.GetOptions{})
@@ -392,7 +392,7 @@ func GetAdmissionName() (string, error) {
 
 // GetAdmissionReference is a utility function to fetch a reference
 // to the admission webhook deployment object
-func GetAdmissionReference(kubeClient *kubernetes.Clientset) (*metav1.OwnerReference, error) {
+func GetAdmissionReference(kubeClient kubernetes.Interface) (*metav1.OwnerReference, error) {
 
 	// Fetch our namespace
 	litmusNamespace, err := getLitmusNamespace()
@@ -420,7 +420,7 @@ func GetAdmissionReference(kubeClient *kubernetes.Clientset) (*metav1.OwnerRefer
 
 // preUpgrade checks for the required older webhook configs,older
 // then 1.3.0 if exists delete them.
-func preUpgrade(litmusNamespace string, kubeClient *kubernetes.Clientset) error {
+func preUpgrade(litmusNamespace string, kubeClient kubernetes.Interface) error {
 	secretlist, err := kubeClient.CoreV1().Secrets(litmusNamespace).List(metav1.ListOptions{LabelSelector: webhookLabel})
 	if err != nil {
 		return fmt.Errorf("failed to list old secret: %s", err.Error())

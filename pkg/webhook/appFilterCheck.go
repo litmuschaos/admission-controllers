@@ -74,7 +74,7 @@ func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error 
 	}
 }
 
-func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) error {
+func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Interface) error {
 	deployments, err := kubeClient.AppsV1().Deployments(appInfo.Appns).List(metav1.ListOptions{
 		LabelSelector: appInfo.Applabel,
 	})
@@ -95,7 +95,7 @@ func validateDeployment(appInfo v1alpha1.ApplicationParams, kubeClient kubernete
 
 }
 
-func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) error {
+func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Interface) error {
 	statefulsets, err := kubeClient.AppsV1().StatefulSets(appInfo.Appns).List(metav1.ListOptions{
 		LabelSelector: appInfo.Applabel,
 	})
@@ -115,7 +115,7 @@ func validateStatefulSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernet
 
 }
 
-func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Clientset) error {
+func validateDaemonSet(appInfo v1alpha1.ApplicationParams, kubeClient kubernetes.Interface) error {
 	daemonsets, err := kubeClient.AppsV1().DaemonSets(appInfo.Appns).List(metav1.ListOptions{
 		LabelSelector: appInfo.Applabel,
 	})
