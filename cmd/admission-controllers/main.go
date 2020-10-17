@@ -79,7 +79,7 @@ func main() {
 		klog.Fatal(validatorErr, "failed to initialize validation server")
 	}
 
-	wh, err := webhook.New(parameters, *kubeClient, *litmusClient)
+	wh, err := webhook.New(parameters, kubeClient, *litmusClient)
 	if err != nil {
 		klog.Fatalf("failed to create validation webhook: %s", err.Error())
 	}

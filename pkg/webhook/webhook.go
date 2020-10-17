@@ -86,7 +86,7 @@ type webhook struct {
 	Server *http.Server
 
 	// kubeClient is a standard kubernetes clientset
-	kubeClient kubernetes.Clientset
+	kubeClient kubernetes.Interface
 
 	litmusClient litmuschaosv1alpha1.Clientset
 }
@@ -112,7 +112,7 @@ func init() {
 // New creates a new instance of a webhook. Prior to
 // invoking this function, InitValidationServer function must be called to
 // set up secret (for TLS certs) k8s resource. This function runs forever.
-func New(p Parameters, kubeClient kubernetes.Clientset,
+func New(p Parameters, kubeClient kubernetes.Interface,
 	litmusClient litmuschaosv1alpha1.Clientset) (
 	*webhook, error) {
 
@@ -122,7 +122,7 @@ func New(p Parameters, kubeClient kubernetes.Clientset,
 	}
 
 	// Fetch certificate secret information
-	certSecret, err := GetSecret(admNamespace, validatorSecret, &kubeClient)
+	certSecret, err := GetSecret(admNamespace, validatorSecret, kubeClient)
 	if err != nil {
 		return nil, fmt.Errorf(
 			"failed to read secret(%s) object %v",
@@ -304,6 +304,8 @@ func (wh *webhook) Serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// CollectValidationErrors collects all the errors from validation of Chaos Engine
+// and returns the appended error message.
 func (wh *webhook) CollectValidationErrors(ce *v1alpha1.ChaosEngine, fs ...func(*v1alpha1.ChaosEngine) error) error {
 
 	// Collects all the errors from Chaos Engine validation functions
