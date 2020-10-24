@@ -61,6 +61,15 @@ func (wh *webhook) ValidateChaosExperimentsSecrets(chaosEngine *v1alpha1.ChaosEn
 	return fmt.Errorf(strings.Join(secretsErrors, "\n"))
 }
 
+// ValidateCgithaosEngineNamespace validates the existence of the namespace specified in the ChaosEngine
+func (wh *webhook) ValidateChaosEngineNamespace(chaosEngine *v1alpha1.ChaosEngine) error {
+	_, err := wh.kubeClient.CoreV1().Namespaces().Get(chaosEngine.Namespace, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("Unable to find the namespace %s for the ChaosEngine, please check the following error: %v", chaosEngine.Namespace, err)
+	}
+	return nil
+}
+
 func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error {
 	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
 	case "deployment", "deployments":
