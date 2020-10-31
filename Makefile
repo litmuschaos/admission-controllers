@@ -42,7 +42,7 @@ test:
 	@echo "------------------"
 	@echo "--> Run Go Test"
 	@echo "------------------"
-	@go test ./... -v
+	@go test ./... -coverprofile=coverage.txt -v
 
 .PHONY: gotasks
 gotasks: format lint
