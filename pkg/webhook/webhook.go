@@ -200,8 +200,7 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 	err = wh.CollectValidationErrors(&chaosEngine,
 		wh.ValidateChaosTarget,
 		wh.ValidateChaosExperimentsConfigMaps,
-		wh.ValidateChaosExperimentsSecrets,
-		wh.ValidateChaosExperimentInApplicationNamespaces)
+		wh.ValidateChaosExperimentsSecrets)
 	if err != nil {
 		klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
 		response.Allowed = false
