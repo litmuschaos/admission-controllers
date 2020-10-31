@@ -70,6 +70,14 @@ func (wh *webhook) ValidateChaosExperimentsSecrets(chaosEngine *v1alpha1.ChaosEn
 	return fmt.Errorf(strings.Join(secretsErrors, "\n"))
 }
 
+func (wh *webhook) ValidateApplicationNamespace(chaosEngine *v1alpha1.ChaosEngine) error {
+	_, err := wh.kubeClient.CoreV1().Namespaces().Get(chaosEngine.Spec.Appinfo.Appns, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("Unable to find the application namespace %s as specfied in the AppInfo, please check the following error %v", chaosEngine.Spec.Appinfo.Appns, err)
+	}
+	return nil
+}
+
 func (wh *webhook) ValidateChaosTarget(chaosEngine *v1alpha1.ChaosEngine) error {
 	switch resourceType := strings.ToLower(chaosEngine.Spec.Appinfo.AppKind); resourceType {
 	case "deployment", "deployments":
