@@ -88,7 +88,7 @@ type webhook struct {
 	// kubeClient is a standard kubernetes clientset
 	kubeClient kubernetes.Interface
 
-	litmusClient litmuschaosv1alpha1.Clientset
+	litmusClient litmuschaosv1alpha1.Interface
 }
 
 // Parameters are server configures parameters
@@ -113,7 +113,7 @@ func init() {
 // invoking this function, InitValidationServer function must be called to
 // set up secret (for TLS certs) k8s resource. This function runs forever.
 func New(p Parameters, kubeClient kubernetes.Interface,
-	litmusClient litmuschaosv1alpha1.Clientset) (
+	litmusClient litmuschaosv1alpha1.Interface) (
 	*webhook, error) {
 
 	admNamespace, err := getLitmusNamespace()
@@ -197,7 +197,10 @@ func (wh *webhook) validateChaosEngineCreateUpdate(req *v1beta1.AdmissionRequest
 		}
 		return response
 	}
-	err = wh.CollectValidationErrors(&chaosEngine, wh.ValidateChaosTarget, wh.ValidateChaosExperimentsConfigMaps, wh.ValidateChaosExperimentsSecrets)
+	err = wh.CollectValidationErrors(&chaosEngine,
+		wh.ValidateChaosTarget,
+		wh.ValidateChaosExperimentsConfigMaps,
+		wh.ValidateChaosExperimentsSecrets)
 	if err != nil {
 		klog.V(2).Infof("Validation Failed for ChaosEngine: %v", chaosEngine.Name)
 		response.Allowed = false
