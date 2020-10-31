@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
+	fakelitmus "github.com/litmuschaos/chaos-operator/pkg/client/clientset/versioned/fake"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -278,7 +279,7 @@ func TestValidateChaosExperimentInApplicationNamespaces(t *testing.T) {
 		t.Run(test.description, func(t *testing.T) {
 			webhook := webhook{
 				kubeClient:   fake.NewSimpleClientset(test.k8sObjects...),
-				litmusClient: fakelitmus,
+				litmusClient: fakelitmus.NewSimpleClientset(test.litmusObjects...),
 			}
 			err := webhook.ValidateChaosExperimentInApplicationNamespaces(&test.chaosEngine)
 			if test.isErrExpected && err == nil {
