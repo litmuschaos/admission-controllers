@@ -27,6 +27,15 @@ import (
 	"github.com/litmuschaos/chaos-operator/pkg/apis/litmuschaos/v1alpha1"
 )
 
+func (wh *webhook) ValidateChaosExperimentInApplicationNamespaces(chaosEngine *v1alpha1.ChaosEngine) error {
+	for _, experiment := range chaosEngine.Spec.Experiments {
+		if err := wh.checkExperimentInNamespace(experiment.Name, chaosEngine.Spec.Appinfo.Appns); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (wh *webhook) ValidateChaosExperimentsConfigMaps(chaosEngine *v1alpha1.ChaosEngine) error {
 	configMapErrors := make([]string, 0)
 	for _, experiment := range chaosEngine.Spec.Experiments {
@@ -152,4 +161,9 @@ func checkLabelInMap(toCheck []string, labels map[string]string) bool {
 		}
 	}
 	return false
+}
+
+func (wh *webhook) checkExperimentInNamespace(experimentName, namespace string) error {
+	_, err := wh.litmusClient.LitmuschaosV1alpha1().ChaosExperiments(namespace).Get(experimentName, metav1.GetOptions{})
+	return err
 }

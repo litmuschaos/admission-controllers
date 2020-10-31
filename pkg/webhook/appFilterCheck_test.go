@@ -188,6 +188,110 @@ func TestValidateChaosExperimentsConfigMaps(t *testing.T) {
 	}
 }
 
+func TestValidateChaosExperimentInApplicationNamespaces(t *testing.T) {
+	var tests = []struct {
+		description   string
+		k8sObjects    []runtime.Object
+		litmusObjects []runtime.Object
+		chaosEngine   v1alpha1.ChaosEngine
+		isErrExpected bool
+	}{
+		{
+			description:   "Validation fails when none of the specified Secrets is in the Cluster.",
+			litmusObjects: []runtime.Object{},
+			chaosEngine: v1alpha1.ChaosEngine{
+				Spec: v1alpha1.ChaosEngineSpec{
+					Appinfo: v1alpha1.ApplicationParams{
+						Appns: testNamespace,
+					},
+					Experiments: []v1alpha1.ExperimentList{
+						{
+							Name: "experiment1",
+						},
+					},
+				},
+			},
+			isErrExpected: true,
+		},
+		{
+			description: "Validation fails when only some of the specified Secrets are in the Cluster.",
+			litmusObjects: []runtime.Object{
+				&v1alpha1.ChaosExperiment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "experiment1",
+						Namespace: testNamespace,
+					},
+				},
+			},
+			chaosEngine: v1alpha1.ChaosEngine{
+				Spec: v1alpha1.ChaosEngineSpec{
+					Appinfo: v1alpha1.ApplicationParams{
+						Appns: testNamespace,
+					},
+					Experiments: []v1alpha1.ExperimentList{
+						{
+							Name: "experiment1",
+						},
+						{
+							Name: "experiment2",
+						},
+					},
+				},
+			},
+			isErrExpected: true,
+		},
+		{
+			description: "Validation is successfull when all of the specified Secrets are in the Cluster.",
+			litmusObjects: []runtime.Object{
+				&v1alpha1.ChaosExperiment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "experiment1",
+						Namespace: testNamespace,
+					},
+				},
+				&v1alpha1.ChaosExperiment{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "experiment2",
+						Namespace: testNamespace,
+					},
+				},
+			},
+			chaosEngine: v1alpha1.ChaosEngine{
+				Spec: v1alpha1.ChaosEngineSpec{
+					Appinfo: v1alpha1.ApplicationParams{
+						Appns: testNamespace,
+					},
+					Experiments: []v1alpha1.ExperimentList{
+						{
+							Name: "experiment1",
+						},
+						{
+							Name: "experiment2",
+						},
+					},
+				},
+			},
+			isErrExpected: false,
+		},
+	}
+	for _, test := range tests {
+		t.Run(test.description, func(t *testing.T) {
+			webhook := webhook{
+				kubeClient:   fake.NewSimpleClientset(test.k8sObjects...),
+				litmusClient: fakelitmus,
+			}
+			err := webhook.ValidateChaosExperimentInApplicationNamespaces(&test.chaosEngine)
+			if test.isErrExpected && err == nil {
+				t.Fatalf("Test %q failed: expected error not to be nil.", test.description)
+			}
+			if !test.isErrExpected && err != nil {
+				fmt.Println(err)
+				t.Fatalf("Test %q failed: expected error to be nil", test.description)
+			}
+		})
+	}
+}
+
 func TestValidateChaosExperimentsSecrets(t *testing.T) {
 	var tests = []struct {
 		description   string
