@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: admission-server
+  labels:
+    app: admission-server
+    litmuschaos.io/component-name: admission-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: admission-server
+  template:
+    metadata:
+      labels:
+        app: admission-server
+    spec:
+      serviceAccountName: admission-server
+      containers:
+        - name: server
+          image: shubh214/acon:2.3.0
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8443
+          env:
+            - name: ALLOWED_ORIGIN_SERVICE_ACCOUNTS
+              value: '["litmus-admin","replicaset-controller"]'
+            - name: ALLOWED_ORIGIN_IMAGES
+              value: '["^.*/litmuschaos/go-runner:.*$","^.*/litmuschaos/chaos-operator:.*$"]'
+            - name: ALLOWED_TARGET_IMAGES
+              value: '["^.*/litmuschaos/go-runner:.*$"]'
+            - name: TARGET_SERVICE_ACCOUNT
+              value: "litmus-admin"
+            - name: SELF_MANAGED_DEPENDENCIES
+              value: "true"
+            - name: CHAOS_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: admission-server-service
+spec:
+  selector:
+    app: admission-server
+  ports:
+    - port: 443
+      targetPort: 8443

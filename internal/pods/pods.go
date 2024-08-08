@@ -10,10 +10,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 )
 
-const (
-	LitmusAdminServiceAccount = "litmus-admin"
-)
-
 // NewValidationHook creates a new instance of pods validation hook
 func NewValidationHook(clients clients.ClientSets) hook.Hook {
 	return hook.Hook{
@@ -35,7 +31,7 @@ func validateCreate(clients clients.ClientSets) hook.AdmitFunc {
 		if originFromTerminal(r.UserInfo.Username) {
 			return &hook.Result{
 				Allowed: false,
-				Msg:     fmt.Sprintf("request is not initiated by serviceAccount"),
+				Msg:     fmt.Sprintf("request is not initiated by a serviceAccount"),
 			}, nil
 		}
 
@@ -63,7 +59,7 @@ func validateCreate(clients clients.ClientSets) hook.AdmitFunc {
 		if !allowed {
 			return &hook.Result{
 				Allowed: false,
-				Msg:     fmt.Sprintf("origin image doesn't met allowed image criteria"),
+				Msg:     fmt.Sprintf("origin image doesn't met allowed image criteria: %v", msg),
 			}, nil
 		}
 
@@ -82,7 +78,7 @@ func parsePod(object []byte) (*corev1.Pod, error) {
 
 func targetFilter(pod *corev1.Pod) bool {
 	// check service account
-	if pod.Spec.ServiceAccountName == LitmusAdminServiceAccount {
+	if pod.Spec.ServiceAccountName == utils.WebHookFilters.TargetServiceAccount {
 		return true
 	}
 	return false

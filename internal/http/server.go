@@ -1,6 +1,7 @@
 package http
 
 import (
+	"crypto/tls"
 	"fmt"
 	"github.com/litmuschaos/admission-controller/pkg/clients"
 	"net/http"
@@ -9,7 +10,7 @@ import (
 )
 
 // NewServer creates and return a http.Server
-func NewServer(port string, clients clients.ClientSets) *http.Server {
+func NewServer(port string, clients clients.ClientSets, sCert *tls.Certificate) *http.Server {
 	// Instances hooks
 	podsValidation := pods.NewValidationHook(clients)
 
@@ -19,8 +20,14 @@ func NewServer(port string, clients clients.ClientSets) *http.Server {
 	mux.Handle("/healthz", healthz())
 	mux.Handle("/validate/pods", ah.Serve(podsValidation))
 
-	return &http.Server{
+	httpServer := &http.Server{
 		Addr:    fmt.Sprintf(":%s", port),
 		Handler: mux,
 	}
+
+	if sCert != nil {
+		httpServer.TLSConfig = &tls.Config{Certificates: []tls.Certificate{*sCert}}
+	}
+
+	return httpServer
 }

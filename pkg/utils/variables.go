@@ -10,12 +10,18 @@ type Configuration struct {
 	AllowedOriginServiceAccount string `envconfig:"ALLOWED_ORIGIN_SERVICE_ACCOUNTS"`
 	AllowedOriginImages         string `envconfig:"ALLOWED_ORIGIN_IMAGES""`
 	AllowedTargetImages         string `envconfig:"ALLOWED_TARGET_IMAGES"`
+	TargetServiceAccount        string `envconfig:"TARGET_SERVICE_ACCOUNT" default:"litmus-admin"`
+	SelfManagedDependencies     bool   `envconfig:"SELF_MANAGED_DEPENDENCIES" default:"false"`
+	ChaosNamespace              string `envconfig:"CHAOS_NAMESPACE" required:"true"`
 }
 
 type Filters struct {
 	AllowedOriginServiceAccount Filter
 	AllowedOriginImages         Filter
 	AllowedTargetImages         Filter
+	TargetServiceAccount        string
+	SelfManagedDependencies     bool
+	ChaosNamespace              string
 }
 
 type Filter struct {
@@ -42,6 +48,9 @@ func InitENV() error {
 	if err != nil {
 		return err
 	}
+	WebHookFilters.TargetServiceAccount = config.TargetServiceAccount
+	WebHookFilters.SelfManagedDependencies = config.SelfManagedDependencies
+	WebHookFilters.ChaosNamespace = config.ChaosNamespace
 	return nil
 }
 
@@ -60,6 +69,12 @@ func parseAllowedList(x string) (Filter, error) {
 
 	if err := json.Unmarshal([]byte(x), &allowedList); err != nil {
 		return Filter{}, fmt.Errorf("failed to unmarshal allowed list: %s", err.Error())
+	}
+
+	if SliceContains(allowedList, "*") {
+		return Filter{
+			AllowedAll: true,
+		}, nil
 	}
 
 	return Filter{

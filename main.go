@@ -2,9 +2,10 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
-	"fmt"
 	"github.com/litmuschaos/admission-controller/internal/http"
+	"github.com/litmuschaos/admission-controller/internal/webhook"
 	"github.com/litmuschaos/admission-controller/pkg/clients"
 	"github.com/litmuschaos/admission-controller/pkg/log"
 	"github.com/litmuschaos/admission-controller/pkg/utils"
@@ -56,9 +57,25 @@ func main() {
 		return
 	}
 
-	fmt.Println(clients)
+	var tlsCert *tls.Certificate
 
-	server := http.NewServer(port, clients)
+	// manage the dependencies
+	if utils.WebHookFilters.SelfManagedDependencies {
+		tlsCert, err = webhook.ManageDependencies(clients)
+		if err != nil {
+			log.Logger.Errorf("failed to init dependencies: %v", err)
+			return
+		}
+		tlscert, tlskey = "", ""
+	} else {
+		// check for existing of tls cert and key
+		if !utils.IsFileExists(tlscert) || !utils.IsFileExists(tlskey) {
+			log.Logger.Errorf("tls cert or key not found")
+			return
+		}
+	}
+
+	server := http.NewServer(port, clients, tlsCert)
 
 	go func() {
 		// listen shutdown signal
