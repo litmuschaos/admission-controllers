@@ -3,7 +3,7 @@ kind: ValidatingWebhookConfiguration
 metadata:
   name: pod-validation
 webhooks:
-  - name: pod-validation.default.svc
+  - name: pod-validation.litmus.svc
     namespaceSelector:
       matchExpressions:
         - key: kubernetes.io/metadata.name
@@ -11,12 +11,12 @@ webhooks:
           values: ["litmus"]
     clientConfig:
       service:
-        name: admission-server
-        namespace: default
+        name: litmus-admission-server-service
+        namespace: litmus
         path: "/validate/pods"
       caBundle: "${CA_BUNDLE}"
     rules:
-      - operations: ["CREATE"]
+      - operations: ["CREATE", "UPDATE"]
         apiGroups: [""]
         apiVersions: ["v1"]
         resources: ["pods"]

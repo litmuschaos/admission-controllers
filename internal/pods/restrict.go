@@ -12,8 +12,9 @@ import (
 )
 
 const (
-	podNameKey                  = "authentication.kubernetes.io/pod-name"
-	jobControllerServiceAccount = "system:serviceaccount:kube-system:job-controller"
+	podNameKey                     = "authentication.kubernetes.io/pod-name"
+	jobControllerServiceAccount    = "system:serviceaccount:kube-system:job-controller"
+	controllerServiceAccountPrefix = "system:serviceaccount:kube-system"
 )
 
 func validateOriginServiceAccount(serviceAccount string) (bool, string) {
@@ -44,8 +45,8 @@ func validateOriginImage(serviceAccount string, pod *corev1.Pod, extras map[stri
 		return true, ""
 	}
 
-	if serviceAccount == jobControllerServiceAccount {
-		return validateOriginJobImage(pod, clients)
+	if strings.Contains(serviceAccount, controllerServiceAccountPrefix) {
+		return true, ""
 	}
 
 	return validateOriginPodImage(pod.Namespace, extras, clients)
@@ -75,37 +76,6 @@ func validateOriginPodImage(namespace string, extras map[string]v1.ExtraValue, c
 	}
 
 	return false, ""
-}
-
-func validateOriginJobImage(pod *corev1.Pod, clients clients.ClientSets) (bool, string) {
-	jobName := getJobName(pod)
-	if jobName == "" {
-		return false, fmt.Sprintf("could not get origin job name")
-	}
-
-	job, err := clients.KubeClient.BatchV1().Jobs(pod.Namespace).Get(context.Background(), jobName, metav1.GetOptions{})
-	if err != nil {
-		return false, fmt.Sprintf("could not get origin job: %v", err)
-	}
-
-	for _, c := range job.Spec.Template.Spec.Containers {
-		for _, v := range utils.WebHookFilters.AllowedOriginImages.AllowedList {
-			if utils.MatchRegex(v, c.Image) {
-				return true, ""
-			}
-		}
-	}
-
-	return false, ""
-}
-
-func getJobName(pod *corev1.Pod) string {
-	for _, owner := range pod.OwnerReferences {
-		if owner.Kind == "Job" {
-			return owner.Name
-		}
-	}
-	return ""
 }
 
 func originFromTerminal(serviceAccount string) bool {

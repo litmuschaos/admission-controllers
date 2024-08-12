@@ -21,7 +21,7 @@ A list of service accounts that are allowed to launch pods with the target servi
 
 ```yaml
 - name: ALLOWED_ORIGIN_SERVICE_ACCOUNTS
-  value: '["litmus-admin","replicaset-controller"]'
+  value: '["litmus-admin"]'
 ```
 
 ### 2. AllowedOriginImages
@@ -58,16 +58,56 @@ The `SELF_MANAGED_DEPENDENCIES` environment variable controls how the TLS certif
 
 If `SELF_MANAGED_DEPENDENCIES` is set to `false`, you must manually provide the TLS certificates:
 
-1. **Create a Kubernetes Secret**: Create a secret containing the TLS certificate and key.
+1. **Generate TLS Certificate**: Generate a TLS certificate and key for the admission controller.
+   
+   a. Create the CA Certificate:
+      ```bash
+      openssl req -nodes -new -x509 -keyout certs/ca.key -out certs/ca.crt -subj "/CN=admission-server-ca"
+      ```
+
+   b. Generate the Server Key:
+      ```bash
+      openssl genrsa -out certs/tls.key 2048
+      ```
+   
+   c. Generate the Certificate Signing Request (CSR) with SANs:
+      First, create a configuration file for the SANs:
+      san.cnf
+      ```bash
+      [req]
+      distinguished_name = req_distinguished_name
+      req_extensions = req_ext
+      prompt = no
+      
+      [req_distinguished_name]
+      CN = litmus-admission-server-service.litmus.svc
+      
+      [req_ext]
+      subjectAltName = @alt_names
+      
+      [alt_names]
+      DNS.1 = litmus-admission-server-service.litmus.svc
+      DNS.2 = litmus-admission-server-service.litmus.svc.cluster.local
+      ```
+      Then, generate the CSR using this configuration:
+      ````bash
+      openssl req -new -key certs/tls.key -out certs/tls.csr -config san.cnf
+      ````
+   d. Sign the CSR with the CA:
+      ```bash
+      openssl x509 -req -in certs/tls.csr -CA certs/ca.crt -CAkey certs/ca.key -CAcreateserial -out certs/tls.crt -days 365 -extensions req_ext -extfile san.cnf
+      ```
+
+2. **Create a Kubernetes Secret**: Create a secret containing the TLS certificate and key.
 
     ```bash
     kubectl create secret tls admission-server-tls \
-      --cert=/path/to/tls.crt \
-      --key=/path/to/tls.key \
+      --cert=certs/tls.crt \
+      --key=certs/tls.key \
       -n <namespace>
     ```
 
-2. **Mount the Secret**: Mount the secret into the admission controller at the path `/etc/certs`.
+3. **Mount the Secret**: Mount the secret into the admission controller at the path `/etc/certs`.
 
 ## ValidatingWebhookConfiguration
 
@@ -79,35 +119,43 @@ To enforce these restrictions, a `ValidatingWebhookConfiguration` is created. Th
 apiVersion: admissionregistration.k8s.io/v1
 kind: ValidatingWebhookConfiguration
 metadata:
-  name: pod-validation
+   name: pod-validation
 webhooks:
-  - name: pod-validation.default.svc
-    namespaceSelector:
-      matchExpressions:
-        - key: kubernetes.io/metadata.name
-          operator: In
-          values: [ "controller" ]
-    clientConfig:
-      service:
-        name: admission-server
-        namespace: default
-        path: "/validate/pods"
-      caBundle: "${CA_BUNDLE}"
-    rules:
-      - operations: ["CREATE"]
-        apiGroups: [""]
-        apiVersions: ["v1"]
-        resources: ["pods"]
-        scope: "Namespaced"
-    admissionReviewVersions: ["v1"]
-    sideEffects: None
+   - name: pod-validation.litmus.svc
+     namespaceSelector:
+        matchExpressions:
+           - key: kubernetes.io/metadata.name
+             operator: In
+             values: ["litmus"]
+     clientConfig:
+        service:
+           name: litmus-admission-server
+           namespace: litmus
+           path: "/validate/pods"
+        caBundle: "${CA_BUNDLE}"
+     rules:
+        - operations: ["CREATE", "UPDATE"]
+          apiGroups: [""]
+          apiVersions: ["v1"]
+          resources: ["pods"]
+          scope: "Namespaced"
+     admissionReviewVersions: ["v1"]
+     sideEffects: None
+     failurePolicy: Ignore
+     timeoutSeconds: 5
 ```
+
+NOTE: Replace the `${CA_BUNDLE}` placeholder with the base64-encoded CA certificate.
+
+````bash
+CA_BUNDLE=$(cat certs/ca.crt | base64 | tr -d '\n')
+````
 
 ### Explanation:
 
 - **Namespace Selector**: The webhook is configured to operate only within specific namespaces, as defined by the `matchExpressions`.
 - **Client Config**: Specifies the admission server service and the path to be used for validation.
-- **Rules**: The webhook only triggers on `CREATE` operations for pod resources within a namespace.
+- **Rules**: The webhook only triggers on `CREATE` and `UPDATE` operations for pod resources within a namespace.
 - **Admission Review Versions**: Specifies the admission review versions supported by the webhook.
 - **Side Effects**: Indicates that the webhook does not have side effects.
 

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	controllerLabel = "litmuschaos.io/component-name=admission-controller"
+	controllerLabel = "litmuschaos.io/component-name=litmus-admission-server"
 )
 
 func ManageDependencies(clients clients.ClientSets) (*tls.Certificate, error) {
@@ -61,7 +61,6 @@ func createValidator(serviceName string, signingCert []byte, clients clients.Cli
 		sideEffect       = v1.SideEffectClassNone
 		validatePodsPath = "/validate/pods"
 		timeout          = int32(5)
-		failPolicy       = v1.Ignore
 	)
 
 	webhookHandler := v1.ValidatingWebhook{
@@ -73,7 +72,7 @@ func createValidator(serviceName string, signingCert []byte, clients clients.Cli
 		},
 		AdmissionReviewVersions: []string{"v1"},
 		SideEffects:             &sideEffect,
-		FailurePolicy:           &failPolicy,
+		FailurePolicy:           &utils.WebHookFilters.EnforcementPolicy,
 		Rules: []v1.RuleWithOperations{{
 			Operations: []v1.OperationType{
 				v1.Create,
