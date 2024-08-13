@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/kelseyhightower/envconfig"
+	v1 "k8s.io/api/admissionregistration/v1"
+	"strings"
 )
 
 type Configuration struct {
@@ -13,6 +15,7 @@ type Configuration struct {
 	TargetServiceAccount        string `envconfig:"TARGET_SERVICE_ACCOUNT" default:"litmus-admin"`
 	SelfManagedDependencies     bool   `envconfig:"SELF_MANAGED_DEPENDENCIES" default:"false"`
 	ChaosNamespace              string `envconfig:"CHAOS_NAMESPACE" required:"true"`
+	EnforcementPolicy           string `envconfig:"ENFORCEMENT_POLICY" default:"ignore"`
 }
 
 type Filters struct {
@@ -22,6 +25,7 @@ type Filters struct {
 	TargetServiceAccount        string
 	SelfManagedDependencies     bool
 	ChaosNamespace              string
+	EnforcementPolicy           v1.FailurePolicyType
 }
 
 type Filter struct {
@@ -51,6 +55,13 @@ func InitENV() error {
 	WebHookFilters.TargetServiceAccount = config.TargetServiceAccount
 	WebHookFilters.SelfManagedDependencies = config.SelfManagedDependencies
 	WebHookFilters.ChaosNamespace = config.ChaosNamespace
+
+	switch strings.ToLower(config.EnforcementPolicy) {
+	case "fail":
+		WebHookFilters.EnforcementPolicy = v1.Fail
+	default:
+		WebHookFilters.EnforcementPolicy = v1.Ignore
+	}
 	return nil
 }
 
