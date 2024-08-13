@@ -28,7 +28,7 @@ func validateOriginServiceAccount(serviceAccount string) (bool, string) {
 
 	serviceAccountList := strings.Split(serviceAccount, ":")
 	if len(serviceAccountList) != 4 {
-		return false, fmt.Sprintf("%v serviceAccount is not in a valid format 'system:serviceaccount:<ns><name>'")
+		return false, fmt.Sprintf("%v serviceAccount is not in a valid format 'system:serviceaccount:<ns><name>'", serviceAccount)
 	}
 
 	for _, v := range utils.WebHookFilters.AllowedOriginServiceAccount.AllowedList {
@@ -79,6 +79,9 @@ func validateOriginPodImage(namespace string, extras map[string]v1.ExtraValue, c
 }
 
 func originFromTerminal(serviceAccount string) bool {
+	if utils.WebHookFilters.AllowedOriginServiceAccount.AllowedAll {
+		return true
+	}
 	if strings.Contains(serviceAccount, "system:serviceaccount") {
 		return false
 	}
