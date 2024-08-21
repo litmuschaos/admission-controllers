@@ -85,7 +85,7 @@ func validateOriginPodImage(namespace string, extras map[string]v1.ExtraValue, c
 
 func originFromTerminal(serviceAccount string) bool {
 	if utils.WebHookFilters.AllowedOriginServiceAccount.AllowedAll {
-		return true
+		return false
 	}
 	if strings.Contains(serviceAccount, "system:serviceaccount") {
 		return false

@@ -59,7 +59,7 @@ func validateCreate(clients clients.ClientSets) hook.AdmitFunc {
 		if !allowed {
 			return &hook.Result{
 				Allowed: false,
-				Msg:     fmt.Sprintf("origin image doesn't met allowed image criteria: %v", msg),
+				Msg:     fmt.Sprintf("origin image doesn't met allowed image criteria %v", msg),
 			}, nil
 		}
 
