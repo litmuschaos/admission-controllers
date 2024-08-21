@@ -68,14 +68,19 @@ func validateOriginPodImage(namespace string, extras map[string]v1.ExtraValue, c
 	}
 
 	for _, c := range pod.Spec.Containers {
+		matched := false
 		for _, v := range utils.WebHookFilters.AllowedOriginImages.AllowedList {
 			if utils.MatchRegex(v, c.Image) {
-				return true, ""
+				matched = true
+				break
 			}
+		}
+		if !matched {
+			return false, ""
 		}
 	}
 
-	return false, ""
+	return true, ""
 }
 
 func originFromTerminal(serviceAccount string) bool {
